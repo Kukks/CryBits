@@ -35,4 +35,14 @@ class Program
         // Fecha a aplicação
         Application.Exit();
     }
+
+    // Usado para criar um vinculo entre as plataformas na hora de serializar
+    public class Binder : System.Runtime.Serialization.SerializationBinder
+    {
+        public override Type BindToType(string assemblyName, string typeName)
+        {
+            assemblyName = assemblyName.Replace("Server", "Editors");
+            return Type.GetType(string.Format("{0}, {1}", typeName, assemblyName));
+        }
+    }
 }

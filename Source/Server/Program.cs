@@ -118,4 +118,15 @@ class Program
                 break;
         }
     }
+
+    // Usado para criar um vinculo entre as plataformas na hora de serializar
+    public class Binder : System.Runtime.Serialization.SerializationBinder
+    {
+        public override Type BindToType(string assemblyName, string typeName)
+        {
+            assemblyName = assemblyName.Replace("Client", "Server");
+            assemblyName = assemblyName.Replace("Editors", "Server");
+            return Type.GetType(string.Format("{0}, {1}", typeName, assemblyName));
+        }
+    }
 }

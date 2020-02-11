@@ -348,7 +348,7 @@ class NPC
         Lists.Structures.NPC NPC = Lists.NPC[Lists.Temp_Map[Map_Num].NPC[Index].Index];
 
         // Solta os itens
-        for (byte i = 0; i < NPC.Drop.Length; i++)
+        for (byte i = 0; i < NPC.Drop.Count; i++)
             if (NPC.Drop[i].Item_Num > 0)
                 if (Game.Random.Next(NPC.Drop[i].Chance, 101) == 100)
                 {

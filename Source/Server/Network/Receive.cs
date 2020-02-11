@@ -1,5 +1,6 @@
 ﻿using Lidgren.Network;
 using System.IO;
+using System.Runtime.Serialization.Formatters.Binary;
 
 class Receive
 {
@@ -52,6 +53,14 @@ class Receive
         Request_NPCs,
         Request_Items,
         Request_Sprites
+    }
+
+    private static object Deserialize(NetIncomingMessage Data)
+    {
+        // Deserializa os dados
+        BinaryFormatter Formater = new BinaryFormatter();
+        Formater.Binder = new Program.Binder();
+        return Formater.Deserialize(new MemoryStream(Data.ReadBytes(Data.ReadInt32())));
     }
 
     public static void Handle(byte Index, NetIncomingMessage Data)
@@ -252,7 +261,7 @@ class Receive
         Player.Character(Index).X = Class.Spawn_X;
         Player.Character(Index).Y = Class.Spawn_Y;
         for (byte i = 0; i < (byte)Game.Vitals.Count; i++) Player.Character(Index).Vital[i] = Player.Character(Index).MaxVital(i);
-        for (byte i = 0; i < (byte)Class.Item.Length; i++)
+        for (byte i = 0; i < (byte)Class.Item.Count; i++)
             if (Lists.Item[Class.Item[i].Item1].Type == (byte)Game.Items.Equipment && Player.Character(Index).Equipment[Lists.Item[Class.Item[i].Item1].Equip_Type] == 0)
                 Player.Character(Index).Equipment[Lists.Item[Class.Item[i].Item1].Equip_Type] = Class.Item[i].Item1;
             else
@@ -531,6 +540,103 @@ class Receive
             Player.UseItem(Index, Player.Character(Index).Hotbar[Hotbar_Slot].Slot);
     }
 
+    private static void Party_Invite(byte Index, NetIncomingMessage Data)
+    {
+        string Name = Data.ReadString();
+
+        // Encontra o jogador
+        byte Invited = Player.Find(Name);
+
+        // Verifica se o jogador está convectado
+        if (Invited == 0)
+        {
+            Send.Message(Index, "The player ins't connected.", System.Drawing.Color.White);
+            return;
+        }
+        // Verifica se não está tentando se convidar
+        if (Invited == Index)
+        {
+            Send.Message(Index, "You can't be invited.", System.Drawing.Color.White);
+            return;
+        }
+        // Verifica se já tem um grupo
+        if (Player.Character(Invited).Party.Count != 0)
+        {
+            Send.Message(Index, "The player is already part of a party.", System.Drawing.Color.White);
+            return;
+        }
+        // Verifica se o jogador já está analisando um convite para algum grupo
+        if (!string.IsNullOrEmpty(Lists.Temp_Player[Invited].Party_Invitation))
+        {
+            Send.Message(Index, "The player is analyzing an invitation to another party.", System.Drawing.Color.White);
+            return;
+        }
+        // Verifica se o grupo está cheio
+        if (Player.Character(Index).Party.Count == Game.Max_Party_Members - 1)
+        {
+            Send.Message(Index, "Your party is full.", System.Drawing.Color.White);
+            return;
+        }
+
+        // Convida o jogador
+        Lists.Temp_Player[Invited].Party_Invitation = Player.Character(Index).Name;
+        Send.Party_Invitation(Invited, Player.Character(Index).Name);
+    }
+
+    private static void Party_Accept(byte Index)
+    {
+        byte Invitation = Player.Find(Lists.Temp_Player[Index].Party_Invitation);
+
+        // Verifica se já tem um grupo
+        if (Player.Character(Index).Party.Count != 0)
+        {
+            Send.Message(Index, "You are already part of a party.", System.Drawing.Color.White);
+            return;
+        }
+        // Verifica se quem chamou ainda está disponível
+        if (Invitation == 0)
+        {
+            Send.Message(Index, "Who invited you is no longer avaliable.", System.Drawing.Color.White);
+            return;
+        }
+        // Verifica se o grupo está cheio
+        if (Player.Character(Invitation).Party.Count == Game.Max_Party_Members - 1)
+        {
+            Send.Message(Index, "The party is full.", System.Drawing.Color.White);
+            return;
+        }
+
+        // Entra na festa
+        for (byte i = 0; i < Player.Character(Invitation).Party.Count; i++)
+        {
+            Player.Character(Player.Character(Invitation).Party[i]).Party.Add(Index);
+            Player.Character(Index).Party.Add(Player.Character(Invitation).Party[i]);
+        }
+        Player.Character(Index).Party.Insert(0, Invitation);
+        Player.Character(Invitation).Party.Add(Index);
+        Lists.Temp_Player[Index].Party_Invitation = string.Empty;
+        Send.Message(Invitation, Player.Character(Index).Name + " joined the party.", System.Drawing.Color.White);
+
+        // Envia os dados para o grupo
+        Send.Party(Index);
+        for (byte i = 0; i < Player.Character(Index).Party.Count; i++) Send.Party(Player.Character(Index).Party[i]);
+    }
+
+    private static void Party_Decline(byte Index)
+    {
+        byte Invitation = Player.Find(Lists.Temp_Player[Index].Party_Invitation);
+
+        // Recusa o convite
+        if (Invitation != 0) Send.Message(Invitation, Player.Character(Index).Name + " joined the party.", System.Drawing.Color.White);
+        Lists.Temp_Player[Index].Party_Invitation = string.Empty;
+    }
+
+    private static void Party_Leave(byte Index)
+    {
+        // Sai do grupo
+        Player.Party_Leave(Index);
+    }
+
     private static void Write_Server_Data(byte Index, NetIncomingMessage Data)
     {
         // Verifica se o jogador realmente tem permissão 
@@ -560,37 +666,11 @@ class Receive
             return;
         }
 
-        // Quantidade de classes
-        Lists.Class = new Lists.Structures.Class[Data.ReadByte()];
-        Lists.Server_Data.Num_Classes = (byte)Lists.Class.GetUpperBound(0);
-        Write.Server_Data();
-
-        for (short i = 1; i < Lists.Class.Length; i++)
-        {
-            // Redimensiona os valores necessários 
-            Lists.Class[i] = new Lists.Structures.Class();
-            Lists.Class[i].Vital = new short[(byte)Game.Vitals.Count];
-            Lists.Class[i].Attribute = new short[(byte)Game.Attributes.Count];
-            Lists.Class[i].Tex_Male = new short[Data.ReadByte()];
-            Lists.Class[i].Tex_Female = new short[Data.ReadByte()];
-            Lists.Class[i].Item = new System.Tuple<short, short>[Data.ReadByte()];
-
-            // Lê os dados
-            Lists.Class[i].Name = Data.ReadString();
-            Lists.Class[i].Description = Data.ReadString();
-            for (byte t = 0; t < Lists.Class[i].Tex_Male.Length; t++) Lists.Class[i].Tex_Male[t] = Data.ReadInt16();
-            for (byte t = 0; t < Lists.Class[i].Tex_Female.Length; t++) Lists.Class[i].Tex_Female[t] = Data.ReadInt16();
-            Lists.Class[i].Spawn_Map = Data.ReadInt16();
-            Lists.Class[i].Spawn_Direction = Data.ReadByte();
-            Lists.Class[i].Spawn_X = Data.ReadByte();
-            Lists.Class[i].Spawn_Y = Data.ReadByte();
-            for (byte v = 0; v < (byte)Game.Vitals.Count; v++) Lists.Class[i].Vital[v] = Data.ReadInt16();
-            for (byte a = 0; a < (byte)Game.Attributes.Count; a++) Lists.Class[i].Attribute[a] = Data.ReadInt16();
-            for (byte n = 0; n < (byte)Lists.Class[i].Item.Length; n++) Lists.Class[i].Item[n] = new System.Tuple<short, short>(Data.ReadInt16(), Data.ReadInt16());
-        }
-
-        // Salva os dados e envia pra todos jogadores conectados
+        // Lê e salva os dados 
+        Lists.Class = (Lists.Structures.Class[])Deserialize(Data);
         Write.Classes();
+
+        // Envia os dados para todos jogadores conectados
         for (byte i = 1; i <= Game.HigherIndex; i++)
             if (i != Index)
                 Send.Classes(i);
@@ -605,34 +685,11 @@ class Receive
             return;
         }
 
-        // Quantidade de azulejos 
-        Lists.Tile = new Lists.Structures.Tile[Data.ReadByte()];
-        Lists.Server_Data.Num_Tiles = (byte)Lists.Tile.GetUpperBound(0);
-        Write.Server_Data();
-
-        for (byte i = 1; i < Lists.Tile.Length; i++)
-        {
-            // Dados básicos
-            Lists.Tile[i] = new Lists.Structures.Tile();
-            Lists.Tile[i].Width = Data.ReadByte();
-            Lists.Tile[i].Height = Data.ReadByte();
-            Lists.Tile[i].Data = new Lists.Structures.Tile_Data[Lists.Tile[i].Width + 1, Lists.Tile[i].Height + 1];
-
-            for (byte x = 0; x <= Lists.Tile[i].Width; x++)
-                for (byte y = 0; y <= Lists.Tile[i].Height; y++)
-                {
-                    // Atributos
-                    Lists.Tile[i].Data[x, y] = new Lists.Structures.Tile_Data();
-                    Lists.Tile[i].Data[x, y].Attribute = Data.ReadByte();
-                    Lists.Tile[i].Data[x, y].Block = new bool[(byte)Game.Directions.Count];
-
-                    // Bloqueio direcional
-                    for (byte d = 0; d < (byte)Game.Directions.Count; d++) Lists.Tile[i].Data[x, y].Block[d] = Data.ReadBoolean();
-                }
-        }
-
-        // Salva os dados e envia pra todos jogadores conectados
+        // Lê e salva os dados 
+        Lists.Tile = (Lists.Structures.Tile[])Deserialize(Data);
         Write.Tiles();
+       
+        // Envia os dados para todos jogadores conectados
         for (byte i = 1; i <= Game.HigherIndex; i++)
             if (i != Index)
                 Send.Tiles(i);
@@ -647,7 +704,7 @@ class Receive
             return;
         }
 
-        // Quantidade de mapas 
+        // Lê os dados dos azulejos 
         Lists.Map = new Lists.Structures.Map[Data.ReadInt16()];
         Lists.Server_Data.Num_Maps = (short)Lists.Map.GetUpperBound(0);
         Write.Server_Data();
@@ -782,19 +839,22 @@ class Receive
             Lists.NPC[i].Experience = Data.ReadInt32();
             for (byte n = 0; n < (byte)Game.Vitals.Count; n++) Lists.NPC[i].Vital[n] = Data.ReadInt16();
             for (byte n = 0; n < (byte)Game.Attributes.Count; n++) Lists.NPC[i].Attribute[n] = Data.ReadInt16();
-            Lists.NPC[i].Drop = new Lists.Structures.NPC_Drop[Data.ReadByte()];
-            for (byte n = 0; n < Lists.NPC[i].Drop.Length; n++) Lists.NPC[i].Drop[n] = new Lists.Structures.NPC_Drop(Data.ReadInt16(), Data.ReadInt16(), Data.ReadByte());
+            Lists.NPC[i].Drop = new System.Collections.Generic.List<Lists.Structures.NPC_Drop>();
+            byte Drop_Count = Data.ReadByte();
+            for (byte n = 0; n < Drop_Count; n++) Lists.NPC[i].Drop.Add(new Lists.Structures.NPC_Drop(Data.ReadInt16(), Data.ReadInt16(), Data.ReadByte()));
             Lists.NPC[i].AttackNPC = Data.ReadBoolean();
-            Lists.NPC[i].Allie = new short[Data.ReadByte()];
-            for (byte n = 0; n < Lists.NPC[i].Allie.Length; n++) Lists.NPC[i].Allie[n] = Data.ReadInt16();
+            Lists.NPC[i].Allie = new System.Collections.Generic.List<short>();
+            byte Allie_Count = Data.ReadByte();
+            for (byte n = 0; n < Allie_Count; n++) Lists.NPC[i].Allie[n] = Data.ReadInt16();
             Lists.NPC[i].Movement = (NPC.Movements)Data.ReadByte();
             Lists.NPC[i].Flee_Helth = Data.ReadByte();
         }
-
-        // Salva os dados e envia pra todos jogadores conectados
         Write.NPCs();
+
+        // Envia os dados para todos jogadores conectados
         for (byte i = 1; i <= Game.HigherIndex; i++)
-            if (i != Index) Send.NPCs(i);
+            if (i != Index) 
+                Send.NPCs(i);
     }
 
     private static void Write_Items(byte Index, NetIncomingMessage Data)
@@ -806,38 +866,11 @@ class Receive
             return;
         }
 
-        // Quantidade de itens
-        Lists.Item = new Lists.Structures.Item[Data.ReadInt16()];
-        Lists.Server_Data.Num_Items = (byte)Lists.Item.GetUpperBound(0);
-        Write.Server_Data();
-
-        for (short i = 1; i < Lists.Item.Length; i++)
-        {
-            // Redimensiona os valores necessários 
-            Lists.Item[i] = new Lists.Structures.Item();
-            Lists.Item[i].Potion_Vital = new short[(byte)Game.Vitals.Count];
-            Lists.Item[i].Equip_Attribute = new short[(byte)Game.Attributes.Count];
-
-            // Lê os dados
-            Lists.Item[i].Name = Data.ReadString();
-            Lists.Item[i].Description = Data.ReadString();
-            Lists.Item[i].Texture = Data.ReadInt16();
-            Lists.Item[i].Type = Data.ReadByte();
-            Lists.Item[i].Price = Data.ReadInt16();
-            Lists.Item[i].Stackable = Data.ReadBoolean();
-            Lists.Item[i].Bind = Data.ReadByte();
-            Lists.Item[i].Rarity = Data.ReadByte();
-            Lists.Item[i].Req_Level = Data.ReadInt16();
-            Lists.Item[i].Req_Class = Data.ReadByte();
-            Lists.Item[i].Potion_Experience = Data.ReadInt32();
-            for (byte v = 0; v < (byte)Game.Vitals.Count; v++) Lists.Item[i].Potion_Vital[v] = Data.ReadInt16();
-            Lists.Item[i].Equip_Type = Data.ReadByte();
-            for (byte a = 0; a < (byte)Game.Attributes.Count; a++) Lists.Item[i].Equip_Attribute[a] = Data.ReadInt16();
-            Lists.Item[i].Weapon_Damage = Data.ReadInt16();
-        }
-
-        // Salva os dados e envia pra todos jogadores conectados
+        // Lê e salva os dados 
+        Lists.Item = (Lists.Structures.Item[])Deserialize(Data);
         Write.Items();
+
+        // Envia os dados para todos jogadores conectados
         for (byte i = 1; i <= Game.HigherIndex; i++)
             if (i != Index)
                 Send.Items(i);
@@ -892,102 +925,5 @@ class Receive
     private static void Request_Sprites(byte Index, NetIncomingMessage Data)
     {
         Send.Sprites(Index, Data.ReadBoolean());
-    }
-
-    private static void Party_Invite(byte Index, NetIncomingMessage Data)
-    {
-        string Name = Data.ReadString();
-
-        // Encontra o jogador
-        byte Invited = Player.Find(Name);
-
-        // Verifica se o jogador está convectado
-        if (Invited == 0)
-        {
-            Send.Message(Index, "The player ins't connected.", System.Drawing.Color.White);
-            return;
-        }
-        // Verifica se não está tentando se convidar
-        if (Invited == Index)
-        {
-            Send.Message(Index, "You can't be invited.", System.Drawing.Color.White);
-            return;
-        }
-        // Verifica se já tem um grupo
-        if (Player.Character(Invited).Party.Count != 0)
-        {
-            Send.Message(Index, "The player is already part of a party.", System.Drawing.Color.White);
-            return;
-        }
-        // Verifica se o jogador já está analisando um convite para algum grupo
-        if (!string.IsNullOrEmpty(Lists.Temp_Player[Invited].Party_Invitation))
-        {
-            Send.Message(Index, "The player is analyzing an invitation to another party.", System.Drawing.Color.White);
-            return;
-        }
-        // Verifica se o grupo está cheio
-        if (Player.Character(Index).Party.Count == Game.Max_Party_Members - 1)
-        {
-            Send.Message(Index, "Your party is full.", System.Drawing.Color.White);
-            return;
-        }
-
-        // Convida o jogador
-        Lists.Temp_Player[Invited].Party_Invitation = Player.Character(Index).Name;
-        Send.Party_Invitation(Invited, Player.Character(Index).Name);
-    }
-
-    private static void Party_Accept(byte Index)
-    {
-        byte Invitation = Player.Find(Lists.Temp_Player[Index].Party_Invitation);
-
-        // Verifica se já tem um grupo
-        if (Player.Character(Index).Party.Count != 0)
-        {
-            Send.Message(Index, "You are already part of a party.", System.Drawing.Color.White);
-            return;
-        }
-        // Verifica se quem chamou ainda está disponível
-        if (Invitation == 0)
-        {
-            Send.Message(Index, "Who invited you is no longer avaliable.", System.Drawing.Color.White);
-            return;
-        }
-        // Verifica se o grupo está cheio
-        if (Player.Character(Invitation).Party.Count == Game.Max_Party_Members - 1)
-        {
-            Send.Message(Index, "The party is full.", System.Drawing.Color.White);
-            return;
-        }
-
-        // Entra na festa
-        for (byte i = 0; i < Player.Character(Invitation).Party.Count; i++)
-        {
-            Player.Character(Player.Character(Invitation).Party[i]).Party.Add(Index);
-            Player.Character(Index).Party.Add(Player.Character(Invitation).Party[i]);
-        }
-        Player.Character(Index).Party.Insert(0, Invitation);
-        Player.Character(Invitation).Party.Add(Index);
-        Lists.Temp_Player[Index].Party_Invitation = string.Empty;
-        Send.Message(Invitation, Player.Character(Index).Name + " joined the party.", System.Drawing.Color.White);
-
-        // Envia os dados para o grupo
-        Send.Party(Index);
-        for (byte i = 0; i < Player.Character(Index).Party.Count; i++) Send.Party(Player.Character(Index).Party[i]);
-    }
-
-    private static void Party_Decline(byte Index)
-    {
-        byte Invitation = Player.Find(Lists.Temp_Player[Index].Party_Invitation);
-
-        // Recusa o convite
-        if (Invitation != 0) Send.Message(Invitation, Player.Character(Index).Name + " joined the party.", System.Drawing.Color.White);
-        Lists.Temp_Player[Index].Party_Invitation = string.Empty;
-    }
-
-    private static void Party_Leave(byte Index)
-    {
-        // Sai do grupo
-        Player.Party_Leave(Index);
     }
 }

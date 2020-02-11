@@ -331,6 +331,7 @@ partial class Editor_Maps : Form
     private void butSaveAll_Click(object sender, EventArgs e)
     {
         // Salva todos os dados
+        for (short i = 1; i < Lists.Map.Length; i++) Lists.Map[i].Revision += 1;
         Send.Write_Maps();
         MessageBox.Show("All maps have been saved");
     }

@@ -1,4 +1,6 @@
 ﻿using Lidgren.Network;
+using System.IO;
+using System.Runtime.Serialization.Formatters.Binary;
 
 partial class Send
 {
@@ -21,6 +23,16 @@ partial class Send
         Request_NPCs,
         Request_Items,
         Request_Sprites
+    }
+
+    private static void Serialize(NetOutgoingMessage Data, object Element)
+    {
+        // Serializa os dados
+        MemoryStream Stream = new MemoryStream();
+        new BinaryFormatter().Serialize(Stream, Element);
+        Data.Write(Stream.GetBuffer().Length);
+        Data.Write(Stream.GetBuffer());
+        Stream.Close();
     }
 
     public static void Packet(NetOutgoingMessage Data)
@@ -141,29 +153,7 @@ partial class Send
 
         // Envia os dados
         Data.Write((byte)Packets.Write_Classes);
-        Data.Write((byte)Lists.Class.Length);
-        for (byte i = 1; i < Lists.Class.Length; i++)
-        {
-            // Escreve os dados
-            Data.Write((byte)Lists.Class[i].Tex_Male.Count);
-            Data.Write((byte)Lists.Class[i].Tex_Female.Count);
-            Data.Write((byte)Lists.Class[i].Item.Count);
-            Data.Write(Lists.Class[i].Name);
-            Data.Write(Lists.Class[i].Description);
-            for (byte t = 0; t < Lists.Class[i].Tex_Male.Count; t++) Data.Write(Lists.Class[i].Tex_Male[t]);
-            for (byte t = 0; t < Lists.Class[i].Tex_Female.Count; t++) Data.Write(Lists.Class[i].Tex_Female[t]);
-            Data.Write(Lists.Class[i].Spawn_Map);
-            Data.Write(Lists.Class[i].Spawn_Direction);
-            Data.Write(Lists.Class[i].Spawn_X);
-            Data.Write(Lists.Class[i].Spawn_Y);
-            for (byte v = 0; v < (byte)Globals.Vitals.Count; v++) Data.Write(Lists.Class[i].Vital[v]);
-            for (byte a = 0; a < (byte)Globals.Attributes.Count; a++) Data.Write(Lists.Class[i].Attribute[a]);
-            for (byte a = 0; a < Lists.Class[i].Item.Count; a++)
-            {
-                Data.Write(Lists.Class[i].Item[a].Item1);
-                Data.Write(Lists.Class[i].Item[a].Item2);
-            }
-        }
+        Serialize(Data, Lists.Class);
         Packet(Data);
     }
 
@@ -173,22 +163,7 @@ partial class Send
 
         // Envia os dados
         Data.Write((byte)Packets.Write_Tiles);
-        Data.Write((byte)Lists.Tile.Length);
-        for (byte i = 1; i < Lists.Tile.Length; i++)
-        {
-            Data.Write(Lists.Tile[i].Width);
-            Data.Write(Lists.Tile[i].Height);
-
-            for (byte x = 0; x <= Lists.Tile[i].Width; x++)
-                for (byte y = 0; y <= Lists.Tile[i].Height; y++)
-                {
-                    Data.Write(Lists.Tile[i].Data[x, y].Attribute);
-
-                    // Bloqueio direcional
-                    for (byte d = 0; d < (byte)Globals.Directions.Count; d++)
-                        Data.Write(Lists.Tile[i].Data[x, y].Block[d]);
-                }
-        }
+        Serialize(Data, Lists.Tile);
         Packet(Data);
     }
 
@@ -321,25 +296,7 @@ partial class Send
 
         // Envia os dados
         Data.Write((byte)Packets.Write_Items);
-        Data.Write((short)Lists.Item.Length);
-        for (short Index = 1; Index < Lists.Item.Length; Index++)
-        {
-            Data.Write(Lists.Item[Index].Name);
-            Data.Write(Lists.Item[Index].Description);
-            Data.Write(Lists.Item[Index].Texture);
-            Data.Write(Lists.Item[Index].Type);
-            Data.Write(Lists.Item[Index].Price);
-            Data.Write(Lists.Item[Index].Stackable);
-            Data.Write(Lists.Item[Index].Bind);
-            Data.Write(Lists.Item[Index].Rarity);
-            Data.Write(Lists.Item[Index].Req_Level);
-            Data.Write(Lists.Item[Index].Req_Class);
-            Data.Write(Lists.Item[Index].Potion_Experience);
-            for (byte i = 0; i < (byte)Globals.Vitals.Count; i++) Data.Write(Lists.Item[Index].Potion_Vital[i]);
-            Data.Write(Lists.Item[Index].Equip_Type);
-            for (byte i = 0; i < (byte)Globals.Attributes.Count; i++) Data.Write(Lists.Item[Index].Equip_Attribute[i]);
-            Data.Write(Lists.Item[Index].Weapon_Damage);
-        }
+        Serialize(Data, Lists.Item);
         Packet(Data);
     }
 
@@ -349,12 +306,7 @@ partial class Send
 
         // Envia os dados
         Data.Write((byte)Packets.Write_Sprites);
-        Data.Write((short)Lists.Sprite.Length);
-        for (short Index = 1; Index < Lists.Sprite.Length; Index++)
-        {
-            Data.Write(Lists.Sprite[Index].Frame_Width);
-            Data.Write(Lists.Sprite[Index].Frame_Height);
-        }
+        Serialize(Data, Lists.Sprite);
         Packet(Data);
     }
 }

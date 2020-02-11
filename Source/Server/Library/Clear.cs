@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 
 class Clear
 {
@@ -66,9 +67,9 @@ class Clear
         Lists.Class[Index].Name = string.Empty;
         Lists.Class[Index].Vital = new short[(byte)Game.Vitals.Count];
         Lists.Class[Index].Attribute = new short[(byte)Game.Attributes.Count];
-        Lists.Class[Index].Tex_Male = new short[0];
-        Lists.Class[Index].Tex_Female = new short[0];
-        Lists.Class[Index].Item = new Tuple<short, short>[0];
+        Lists.Class[Index].Tex_Male = new List<short>();
+        Lists.Class[Index].Tex_Female = new List<short>();
+        Lists.Class[Index].Item = new List<Tuple<short, short>>();
         Lists.Class[Index].Spawn_Map = 1;
     }
 
@@ -79,8 +80,8 @@ class Clear
         Lists.NPC[Index].Name = string.Empty;
         Lists.NPC[Index].Vital = new short[(byte)Game.Vitals.Count];
         Lists.NPC[Index].Attribute = new short[(byte)Game.Attributes.Count];
-        Lists.NPC[Index].Drop = new Lists.Structures.NPC_Drop[0];
-        Lists.NPC[Index].Allie = new short[0];
+        Lists.NPC[Index].Drop = new List<Lists.Structures.NPC_Drop>();
+        Lists.NPC[Index].Allie = new List<short>();
     }
 
     public static void Item(byte Index)

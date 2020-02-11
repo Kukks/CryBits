@@ -21,6 +21,15 @@ partial class Read
         Tiles();
     }
 
+    public static object Deserialize(FileInfo File)
+    {
+        // Deserailzia os dados
+        FileStream Stream = File.OpenRead();
+        Lists.Server_Data = (Lists.Structures.Server_Data)new BinaryFormatter().Deserialize(Stream);
+        Stream.Close();
+        return Stream;
+    }
+
     public static void Server_Data()
     {
         // Cria o arquivo caso ele não existir

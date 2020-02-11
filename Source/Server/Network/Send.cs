@@ -1,5 +1,7 @@
 ﻿using Lidgren.Network;
 using System.Drawing;
+using System.IO;
+using System.Runtime.Serialization.Formatters.Binary;
 
 class Send
 {
@@ -53,10 +55,19 @@ class Send
         Classes,
         Tiles,
         Maps,
-        Map,
         NPCs,
         Items,
         Sprites
+    }
+
+    private static void Serialize(NetOutgoingMessage Data, object Element)
+    {
+        // Serializa os dados
+        MemoryStream Stream = new MemoryStream();
+        new BinaryFormatter().Serialize(Stream, Element);
+        Data.Write(Stream.GetBuffer().Length);
+        Data.Write(Stream.GetBuffer());
+        Stream.Close();
     }
 
     public static void ToPlayer(byte Index, NetOutgoingMessage Data)
@@ -196,10 +207,10 @@ class Send
             // Escreve os dados
             Data.Write(Lists.Class[i].Name);
             Data.Write(Lists.Class[i].Description);
-            Data.Write((byte)Lists.Class[i].Tex_Male.Length);
-            for (byte t = 0; t < Lists.Class[i].Tex_Male.Length; t++) Data.Write(Lists.Class[i].Tex_Male[t]);
-            Data.Write((byte)Lists.Class[i].Tex_Female.Length);
-            for (byte t = 0; t < Lists.Class[i].Tex_Female.Length; t++) Data.Write(Lists.Class[i].Tex_Female[t]);
+            Data.Write((byte)Lists.Class[i].Tex_Male.Count);
+            for (byte t = 0; t < Lists.Class[i].Tex_Male.Count; t++) Data.Write(Lists.Class[i].Tex_Male[t]);
+            Data.Write((byte)Lists.Class[i].Tex_Female.Count);
+            for (byte t = 0; t < Lists.Class[i].Tex_Female.Count; t++) Data.Write(Lists.Class[i].Tex_Female[t]);
 
             // Apenas dados do editor
             if (Lists.Temp_Player[Index].InEditor)
@@ -210,8 +221,8 @@ class Send
                 Data.Write(Lists.Class[i].Spawn_Y);
                 for (byte n = 0; n < (byte)Game.Vitals.Count; n++) Data.Write(Lists.Class[i].Vital[n]);
                 for (byte n = 0; n < (byte)Game.Attributes.Count; n++) Data.Write(Lists.Class[i].Attribute[n]);
-                Data.Write((byte)Lists.Class[i].Item.Length);
-                for (byte n = 0; n < (byte)Lists.Class[i].Item.Length; n++)
+                Data.Write((byte)Lists.Class[i].Item.Count);
+                for (byte n = 0; n < (byte)Lists.Class[i].Item.Count; n++)
                 {
                     Data.Write(Lists.Class[i].Item[n].Item1);
                     Data.Write(Lists.Class[i].Item[n].Item2);
@@ -379,24 +390,24 @@ class Send
         ToPlayer(Index, Data);
     }
 
-    public static void Player_LeaveMap(byte Index, short Map)
+    public static void Player_LeaveMap(byte Index, short Map_Num)
     {
         NetOutgoingMessage Data = Socket.Device.CreateMessage();
 
         // Envia os dados
         Data.Write((byte)Client_Packets.Player_Leave);
         Data.Write(Index);
-        ToMapBut(Map, Index, Data);
+        ToMapBut(Map_Num, Index, Data);
     }
 
-    public static void Map_Revision(byte Index, short Map)
+    public static void Map_Revision(byte Index, short Map_Num)
     {
         NetOutgoingMessage Data = Socket.Device.CreateMessage();
 
         // Envia os dados
         Data.Write((byte)Client_Packets.Map_Revision);
-        Data.Write(Map);
-        Data.Write(Lists.Map[Map].Revision);
+        Data.Write(Map_Num);
+        Data.Write(Lists.Map[Map_Num].Revision);
         ToPlayer(Index, Data);
     }
 
@@ -406,9 +417,9 @@ class Send
 
         // Envia os dados
         Data.Write((byte)Editor_Packets.Maps);
-        Data.Write((short)Lists.Map.Length);
+        Serialize(Data, Lists.Map); 
+        Data.Write(OpenEditor);
         ToPlayer(Index, Data);
-        for (short i = 1; i < Lists.Map.Length; i++) Map(Index, i, OpenEditor);
     }
 
     public static void Map(byte Index, short Map_Num, bool OpenEditor = false)
@@ -416,8 +427,7 @@ class Send
         NetOutgoingMessage Data = Socket.Device.CreateMessage();
 
         // Envia os dados
-        if (Lists.Temp_Player[Index].InEditor) Data.Write((byte)Editor_Packets.Map);
-        else Data.Write((byte)Client_Packets.Map);
+        Data.Write((byte)Client_Packets.Map);
         Data.Write(Map_Num);
         Data.Write(Lists.Map[Map_Num].Revision);
         Data.Write(Lists.Map[Map_Num].Name);
@@ -580,25 +590,7 @@ class Send
         // Envia os dados
         if (Lists.Temp_Player[Index].InEditor) Data.Write((byte)Editor_Packets.Items);
         else Data.Write((byte)Client_Packets.Items);
-        Data.Write((short)Lists.Item.GetUpperBound(0));
-        for (short i = 1; i < Lists.Item.Length; i++)
-        {
-            Data.Write(Lists.Item[i].Name);
-            Data.Write(Lists.Item[i].Description);
-            Data.Write(Lists.Item[i].Texture);
-            Data.Write(Lists.Item[i].Type);
-            Data.Write(Lists.Item[i].Price);
-            Data.Write(Lists.Item[i].Stackable);
-            Data.Write(Lists.Item[i].Bind);
-            Data.Write(Lists.Item[i].Rarity);
-            Data.Write(Lists.Item[i].Req_Level);
-            Data.Write(Lists.Item[i].Req_Class);
-            Data.Write(Lists.Item[i].Potion_Experience);
-            for (byte v = 0; v < (byte)Game.Vitals.Count; v++) Data.Write(Lists.Item[i].Potion_Vital[v]);
-            Data.Write(Lists.Item[i].Equip_Type);
-            for (byte a = 0; a < (byte)Game.Attributes.Count; a++) Data.Write(Lists.Item[i].Equip_Attribute[a]);
-            Data.Write(Lists.Item[i].Weapon_Damage);
-        }
+        Serialize(Data, Lists.Item);
         Data.Write(OpenEditor);
 
         // Envia os dados
@@ -693,16 +685,16 @@ class Send
                 Data.Write(Lists.NPC[i].Sight);
                 Data.Write(Lists.NPC[i].Experience);
                 for (byte n = 0; n < (byte)Game.Attributes.Count; n++) Data.Write(Lists.NPC[i].Attribute[n]);
-                Data.Write((byte)Lists.NPC[i].Drop.Length);
-                for (byte n = 0; n < Lists.NPC[i].Drop.Length; n++)
+                Data.Write((byte)Lists.NPC[i].Drop.Count);
+                for (byte n = 0; n < Lists.NPC[i].Drop.Count; n++)
                 {
                     Data.Write(Lists.NPC[i].Drop[n].Item_Num);
                     Data.Write(Lists.NPC[i].Drop[n].Amount);
                     Data.Write(Lists.NPC[i].Drop[n].Chance);
                 }
                 Data.Write(Lists.NPC[i].AttackNPC);
-                Data.Write((byte)Lists.NPC[i].Allie.Length);
-                for (byte n = 0; n < Lists.NPC[i].Allie.Length; n++) Data.Write(Lists.NPC[i].Allie[n]);
+                Data.Write((byte)Lists.NPC[i].Allie.Count);
+                for (byte n = 0; n < Lists.NPC[i].Allie.Count; n++) Data.Write(Lists.NPC[i].Allie[n]);
                 Data.Write((byte)Lists.NPC[i].Movement);
                 Data.Write(Lists.NPC[i].Flee_Helth);
             }

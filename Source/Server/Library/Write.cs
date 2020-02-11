@@ -73,6 +73,7 @@ class Write
         // Descarrega o arquivo
         Data.Dispose();
     }
+
     public static void Server_Data()
     {
         // Escreve os dados
@@ -113,6 +114,8 @@ class Write
     {
         // Escreve os dados
         for (byte Index = 1; Index < Lists.Item.Length; Index++) Item(Index);
+        Lists.Server_Data.Num_Items = (short)Lists.Item.GetUpperBound(0);
+        Server_Data();
     }
 
     public static void Item(byte Index)
@@ -127,6 +130,8 @@ class Write
     {
         // Escreve os dados
         for (byte i = 1; i < Lists.Tile.Length; i++) Tile(i);
+        Lists.Server_Data.Num_Tiles = (byte)Lists.Tile.GetUpperBound(0);
+        Server_Data();
     }
 
     public static void Tile(byte Index)

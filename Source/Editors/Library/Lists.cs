@@ -69,6 +69,7 @@ class Lists
             public byte Texture_Num { get; set; }
         }
 
+        [Serializable]
         public class Class
         {
             public string Name;
@@ -84,6 +85,7 @@ class Lists
             public List<Tuple<short, short>> Item;
         }
 
+        [Serializable]
         public struct Tile
         {
             public byte Width;
@@ -91,6 +93,7 @@ class Lists
             public Tile_Data[,] Data;
         }
 
+        [Serializable]
         public struct Tile_Data
         {
             public byte Attribute;
@@ -221,6 +224,7 @@ class Lists
             public byte Flee_Helth;
         }
 
+        [Serializable]
         public class Item
         {
             // Geral
@@ -258,6 +262,7 @@ class Lists
             }
         }
 
+        [Serializable]
         public struct Sprite_Movement
         {
             public byte Sound;
@@ -268,6 +273,7 @@ class Lists
             public short Duration;
         }
 
+        [Serializable]
         public struct Sprite
         {
             public byte Frame_Width;
